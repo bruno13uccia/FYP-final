@@ -58,7 +58,26 @@
   const timelineItems = document.querySelectorAll(".vertical-timeline-item");
   const timelineToggles = document.querySelectorAll(".timeline-toggle");
 
+  const pauseVideos = (container, reset = false) => {
+    container.querySelectorAll("video").forEach((video) => {
+      video.pause();
+      if (reset && video.readyState > 0) {
+        video.currentTime = 0;
+      }
+    });
+  };
+
+  const playActiveVideo = (container) => {
+    const video = container.querySelector(".timeline-gallery-slide.is-active video");
+    if (!video) return;
+    video.muted = true;
+    video.play().catch(() => {
+      // Muted inline video may still be blocked by an unusually strict browser policy.
+    });
+  };
+
   const collapseItem = (item) => {
+    pauseVideos(item, true);
     item.classList.remove("is-expanded");
     const toggle = item.querySelector(".timeline-toggle");
     const extra = item.querySelector(".timeline-extra");
@@ -80,6 +99,7 @@
     if (extra) {
       extra.hidden = false;
     }
+    playActiveVideo(item);
   };
 
   timelineToggles.forEach((toggle) => {
@@ -129,11 +149,15 @@
     }
 
     const updateGallery = () => {
+      pauseVideos(gallery, true);
       slides.forEach((slide, index) => {
         slide.classList.toggle("is-active", index === activeIndex);
       });
       if (count) {
         count.textContent = `${activeIndex + 1} / ${slides.length}`;
+      }
+      if (!gallery.closest("[hidden]")) {
+        playActiveVideo(gallery);
       }
     };
 
