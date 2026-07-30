@@ -240,3 +240,142 @@
   window.addEventListener("scroll", requestUpdate, { passive: true });
   window.addEventListener("resize", requestUpdate);
 })();
+
+// PC 端开场：真人海报退潮，AI 海报涌入，最后揭示标题。
+(function () {
+  const hero = document.querySelector("[data-scroll-hero]");
+  if (!hero || window.matchMedia("(max-width: 980px)").matches) return;
+
+  const realField = hero.querySelector(".hero-poster-field-real");
+  const aiField = hero.querySelector(".hero-poster-field-ai");
+  const fillPosterField = (field, total) => {
+    if (!field) return;
+    const originals = Array.from(field.querySelectorAll(".hero-poster"));
+    if (originals.length === 0) return;
+
+    for (let index = originals.length; index < total; index += 1) {
+      const clone = originals[index % originals.length].cloneNode(true);
+      clone.dataset.repeat = "true";
+      field.appendChild(clone);
+    }
+  };
+
+  fillPosterField(realField, 18);
+  fillPosterField(aiField, 48);
+
+  const realPosters = Array.from(hero.querySelectorAll(".hero-poster-field-real .hero-poster"));
+  const aiPosters = Array.from(hero.querySelectorAll(".hero-poster-field-ai .hero-poster"));
+  const glass = hero.querySelector(".hero-glass");
+  const copy = hero.querySelector(".hero-copy");
+  const scrollPrompt = hero.querySelector(".hero-scroll");
+
+  const realLayout = [
+    [-4, -10, -6, 1.05],
+    [12, 48, 4, 0.92],
+    [22, 2, -3, 0.88],
+    [38, 58, 5, 1.02],
+    [44, 18, -2, 0.96],
+    [58, -8, 5, 0.9],
+    [67, 51, -5, 1.04],
+    [78, 8, 3, 0.94],
+    [88, 57, -4, 1.08],
+    [94, 20, 6, 0.9]
+  ];
+
+  const clamp = (value, min = 0, max = 1) => Math.min(Math.max(value, min), max);
+  const smoothstep = (start, end, value) => {
+    const progress = clamp((value - start) / (end - start));
+    return progress * progress * (3 - 2 * progress);
+  };
+  const mix = (start, end, progress) => start + (end - start) * progress;
+
+  const render = () => {
+    const viewportHeight = window.innerHeight;
+    const rect = hero.getBoundingClientRect();
+    const scrollDistance = Math.max(hero.offsetHeight - viewportHeight, 1);
+    const progress = clamp(-rect.top / scrollDistance);
+    const wave = smoothstep(0.05, 0.5, progress);
+    const reveal = smoothstep(0.56, 0.78, progress);
+    const titleReveal = smoothstep(0.63, 0.82, progress);
+
+    hero.style.setProperty("--hero-progress", progress.toFixed(4));
+    hero.style.setProperty("--hero-wave", wave.toFixed(4));
+    hero.style.setProperty("--hero-reveal", reveal.toFixed(4));
+
+    realPosters.forEach((poster, index) => {
+      const repeatRow = Math.floor(index / realLayout.length);
+      const layoutIndex = (index + repeatRow * 5) % realLayout.length;
+      const [baseX, baseY, baseRotation, baseScaleValue] = realLayout[layoutIndex];
+      const startX = baseX + repeatRow * (layoutIndex % 2 ? 2 : -2);
+      const startY = baseY + repeatRow * (layoutIndex % 3 === 0 ? 7 : -6);
+      const rotation = baseRotation + repeatRow * (layoutIndex % 2 ? -3 : 3);
+      const baseScale = baseScaleValue * (repeatRow ? 0.82 : 1);
+      const direction = startX < 50 ? -1 : 1;
+      const endX = startX + direction * (10 + (index % 3) * 3);
+      const endY = startY - 7 + (index % 2) * 5;
+      const x = mix(startX, endX, wave);
+      const y = mix(startY, endY, wave);
+      const scale = mix(baseScale, baseScale * 0.84, wave);
+      const opacity = mix(0.9, 0.16, wave);
+
+      poster.style.zIndex = String(index + 1);
+      poster.style.opacity = opacity.toFixed(3);
+      poster.style.transform = `translate3d(${x}vw, ${y}vh, ${-80 + index * 5}px) rotate(${rotation}deg) scale(${scale})`;
+      poster.style.filter = `saturate(${mix(0.72, 0.48, wave)}) brightness(${mix(0.72, 0.46, wave)}) blur(${reveal * 1.8}px)`;
+    });
+
+    aiPosters.forEach((poster, index) => {
+      const placementIndex = index;
+      const column = placementIndex % 8;
+      const row = Math.floor(placementIndex / 8);
+      const endX = -6 + column * 14.2 + (row % 2) * 2.5;
+      const endY = -18 + row * 19 + (column % 2) * 3;
+      const entryType = index % 3;
+      const startX = entryType === 0 ? endX - 10 : entryType === 1 ? 112 + (index % 4) * 4 : -28 - (index % 4) * 4;
+      const startY = entryType === 0 ? 112 + (index % 5) * 7 : endY + 16;
+      const delay = (index % 8) * 0.008 + row * 0.012;
+      const localProgress = smoothstep(0.055 + delay, 0.43 + delay, progress);
+      const x = mix(startX, endX, localProgress);
+      const y = mix(startY, endY, localProgress);
+      const startRotation = entryType === 1 ? 14 : entryType === 2 ? -14 : index % 2 ? 8 : -8;
+      const endRotation = ((index * 7) % 11) - 5;
+      const scaleBoost = index % 5 === 0 ? 1.16 : index % 4 === 0 ? 1.08 : 1;
+      const scale = mix(0.62, scaleBoost, localProgress);
+      const opacity = localProgress * mix(0.96, 0.68, reveal);
+
+      poster.style.zIndex = String(20 + index);
+      poster.style.opacity = opacity.toFixed(3);
+      poster.style.transform = `translate3d(${x}vw, ${y}vh, ${index * 7}px) rotate(${mix(startRotation, endRotation, localProgress)}deg) scale(${scale})`;
+      poster.style.filter = `saturate(${mix(1.02, 0.64, reveal)}) brightness(${mix(0.9, 0.62, reveal)}) blur(${reveal * 2.4}px)`;
+    });
+
+    if (glass) {
+      glass.style.opacity = (reveal * 0.76).toFixed(3);
+      glass.style.backdropFilter = `blur(${reveal * 24}px) saturate(${100 + reveal * 32}%)`;
+      glass.style.webkitBackdropFilter = `blur(${reveal * 24}px) saturate(${100 + reveal * 32}%)`;
+    }
+
+    if (copy) {
+      copy.style.opacity = titleReveal.toFixed(3);
+      copy.style.transform = `translate(-50%, calc(-50% + ${mix(34, 0, titleReveal)}px))`;
+    }
+
+    if (scrollPrompt) {
+      scrollPrompt.style.opacity = String(1 - smoothstep(0.025, 0.14, progress));
+    }
+  };
+
+  let ticking = false;
+  const requestRender = () => {
+    if (ticking) return;
+    ticking = true;
+    window.requestAnimationFrame(() => {
+      render();
+      ticking = false;
+    });
+  };
+
+  render();
+  window.addEventListener("scroll", requestRender, { passive: true });
+  window.addEventListener("resize", requestRender);
+})();
